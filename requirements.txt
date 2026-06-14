@@ -1,0 +1,7 @@
+pywin32
+numpy
+opencv-python
+requests
+httpx[http2]
+yt-dlp
+psutil

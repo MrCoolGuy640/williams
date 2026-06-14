@@ -67,3 +67,6 @@ build.bat
 
 # other private stuff
 .private/
+
+test.py
+

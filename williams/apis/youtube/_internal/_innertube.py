@@ -1013,16 +1013,47 @@ def _parse_channel_page(html_text: str, handle_or_id: str) -> dict:
 
     channel_name  = _simple_or_runs(header.get("title")) or metadata.get("title") or ""
     description   = metadata.get("description") or ""
-    sub_text      = _simple_or_runs(header.get("subscriberCountText")) or ""
-    avatar_thumbs = _dig(header, "avatar", "thumbnails") or []
-    avatar_url    = avatar_thumbs[-1]["url"] if avatar_thumbs else ""
-    banner_thumbs = (
-        _dig(header, "banner", "thumbnails")
-        or _dig(header, "banner", "image", "thumbnails")
-        or []
-    )
-    banner_url            = banner_thumbs[-1]["url"] if banner_thumbs else ""
-    uploads_playlist_id   = f"UU{channel_id[2:]}" if channel_id.startswith("UC") else None
+    
+    # Extract subscriber text from metadata rows in pageHeaderRenderer
+    sub_text = ""
+    metadata_rows = _dig(header, "content", "pageHeaderViewModel", "metadata", "contentMetadataViewModel", "metadataRows") or []
+    for row in metadata_rows:
+        parts = row.get("metadataParts") or []
+        for part in parts:
+            text_content = _dig(part, "text", "content") or ""
+            if "subscriber" in text_content.lower():
+                sub_text = text_content
+                break
+        if sub_text:
+            break
+    
+    # Fallback to old location if not found
+    if not sub_text:
+        sub_text = _simple_or_runs(header.get("subscriberCountText")) or ""
+    
+    # Extract avatar URL from decoratedAvatarViewModel
+    avatar_thumbs = _dig(header, "content", "pageHeaderViewModel", "image", "decoratedAvatarViewModel", "avatar", "avatarViewModel", "image", "sources") or []
+    avatar_url = avatar_thumbs[-1]["url"] if avatar_thumbs else ""
+    
+    # Fallback to old location if not found
+    if not avatar_url:
+        avatar_thumbs = _dig(header, "avatar", "thumbnails") or []
+        avatar_url = avatar_thumbs[-1]["url"] if avatar_thumbs else ""
+    
+    # Extract banner URL from imageBannerViewModel
+    banner_thumbs = _dig(header, "content", "pageHeaderViewModel", "banner", "imageBannerViewModel", "image", "sources") or []
+    banner_url = banner_thumbs[-1]["url"] if banner_thumbs else ""
+    
+    # Fallback to old location if not found
+    if not banner_url:
+        banner_thumbs = (
+            _dig(header, "banner", "thumbnails")
+            or _dig(header, "banner", "image", "thumbnails")
+            or []
+        )
+        banner_url = banner_thumbs[-1]["url"] if banner_thumbs else ""
+    
+    uploads_playlist_id = f"UU{channel_id[2:]}" if channel_id.startswith("UC") else None
 
     return {
         "channel_id":           channel_id,

@@ -54,9 +54,6 @@ pupi/
 *.key
 *.pem
 
-# tests folder
-tests/
-
 # Building stuff
 MANIFEST.in
 upload_to_pypi.py

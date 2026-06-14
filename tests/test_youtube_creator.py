@@ -92,7 +92,7 @@ def test_subscriber_text_is_safe_string():
     text = creator.subscriber_count_text
 
     if text:
-        # optional sanity check (non-fatal format check)
+        # it should contain a number
         assert any(c.isdigit() for c in text)
 
 
@@ -106,7 +106,7 @@ def test_creator_videoslist_behaviour():
 
 
 def test_creator_handle_resolution():
-    """Test that handle is correctly resolved from different input formats."""
+    """Test that the creator is correctly resolved from different input formats."""
     # Test with handle URL
     creator1 = YoutubeCreator("https://www.youtube.com/@MrBeast")
     assert creator1.handle == "MrBeast"

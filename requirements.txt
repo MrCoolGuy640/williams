@@ -5,3 +5,4 @@ requests
 httpx[http2]
 yt-dlp
 psutil
+imageio

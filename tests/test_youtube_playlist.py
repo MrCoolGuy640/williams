@@ -1,6 +1,6 @@
 import pytest
 
-from williams.apis.youtube import YoutubePlaylist, YoutubeVideo
+from williams.apis.youtube import YoutubePlaylist, YoutubeVideo, YoutubeCreator
 
 
 # Example public playlist URL (YouTube Music Top 100)
@@ -18,7 +18,8 @@ def test_playlist_basic_properties():
     assert isinstance(count, int) and count > 0
     # Owner information should be a string (may be empty for system playlists like YouTube Music)
     owner = playlist.owner
-    assert isinstance(owner, str)
+    assert isinstance(owner, str) and playlist.owner
+    assert isinstance(playlist.get_owner_creator(), YoutubeCreator)
     # Retrieve the first video and verify its type
     first_video = playlist.get_video_at_index(0)
     assert isinstance(first_video, YoutubeVideo)

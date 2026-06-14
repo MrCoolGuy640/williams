@@ -119,7 +119,12 @@ class YoutubePlaylist:
         return self._url
 
     def __repr__(self) -> str:
-        title = self._data.get("title", "?") if self._data else "?"
+        # Ensure data is loaded before accessing it
+        try:
+            self._ensure_data()
+            title = self._data.get("title", "?") if self._data else "?"
+        except Exception:
+            title = "?"
         return f"YoutubePlaylist(id={self._playlist_id!r}, title={title!r})"
 
     def __eq__(self, other: object) -> bool:
@@ -238,7 +243,50 @@ class YoutubePlaylist:
             "owner_id":     self.owner_id,
             "thumbnail_url": self.thumbnail_url,
             "last_updated": self.last_updated,
+            "views":        self.views,
         }
+
+    def get_video_count(self) -> int:
+        """
+        Return the number of videos in this playlist.
+        
+        This is an alias for the ``video_count`` property provided for explicit
+        method-call style.
+        
+        Returns
+        -------
+        int
+            The number of videos in the playlist.
+        """
+        return self.video_count
+
+    def get_owner(self) -> str:
+        """
+        Return the owner name of this playlist.
+        
+        This is an alias for the ``owner`` property provided for explicit
+        method-call style.
+        
+        Returns
+        -------
+        str
+            The owner name.
+        """
+        return self.owner
+
+    def get_owner_id(self) -> str:
+        """
+        Return the owner ID of this playlist.
+        
+        This is an alias for the ``owner_id`` property provided for explicit
+        method-call style.
+        
+        Returns
+        -------
+        str
+            The owner channel ID.
+        """
+        return self.owner_id
 
     # ------------------------------------------------------------------
     # Video retrieval  ←  core feature / performance-critical

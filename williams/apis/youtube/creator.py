@@ -102,7 +102,12 @@ class YoutubeCreator:
         return f"https://www.youtube.com/@{self._handle}"
 
     def __repr__(self) -> str:
-        name = self._data.get("channel_name", "?") if self._data else "?"
+        # Ensure data is loaded before accessing it
+        try:
+            self._ensure_data()
+            name = self._data.get("channel_name", "?") if self._data else "?"
+        except Exception:
+            name = "?"
         return f"YoutubeCreator(handle={self._handle!r}, name={name!r})"
 
     def __eq__(self, other: object) -> bool:

@@ -684,9 +684,20 @@ class YoutubeVideo:
         return f"https://youtu.be/{self._video_id}"
 
     def __repr__(self) -> str:
-        title = self._stub.get("title") if self._stub else (
-            self._data.get("title") if self._data else "?"
-        )
+        # Get title from stub or data, or fetch if needed
+        if self._stub is not None:
+            title = self._stub.get("title")
+        elif self._data is not None:
+            title = self._data.get("title")
+        else:
+            # Fetch the data to get the title
+            try:
+                self._ensure_full_data()
+                title = self._data.get("title") if self._data else None
+            except Exception:
+                title = None
+        if not title:
+            title = "?"
         return f"YoutubeVideo(id={self._video_id!r}, title={title!r})"
 
     def __eq__(self, other: object) -> bool:

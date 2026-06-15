@@ -364,3 +364,122 @@ def test_channel_with_special_characters_in_description():
     assert isinstance(description, str)
     # Description should be accessible without errors
     # (actual content depends on the channel)
+
+
+# ============================================================================
+# Tests for get_links feature
+# ============================================================================
+
+MARIONYMPH_URL = "https://www.youtube.com/@marionymph"
+MARIONYMPH_HANDLE = "marionymph"
+
+
+def test_get_links_returns_list():
+    """Test that get_links returns a list."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    links = creator.get_links()
+    assert isinstance(links, list)
+
+
+def test_get_links_has_expected_structure():
+    """Test that each link has 'title' and 'url' keys."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    links = creator.get_links()
+    
+    for link in links:
+        assert isinstance(link, dict), f"Link should be a dict, got {type(link)}"
+        assert "title" in link, f"Link should have 'title' key: {link}"
+        assert "url" in link, f"Link should have 'url' key: {link}"
+        assert isinstance(link["title"], str), f"Title should be a string: {link['title']}"
+        assert isinstance(link["url"], str), f"URL should be a string: {link['url']}"
+        assert link["url"].startswith("http"), f"URL should start with http: {link['url']}"
+
+
+def test_get_links_contains_known_social_links():
+    """Test that marionymph has expected social links."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    links = creator.get_links()
+    
+    # Should have at least some links
+    assert len(links) > 0, "Should have at least one link"
+    
+    # Check that we have the expected social media platforms
+    titles = [link["title"] for link in links]
+    urls = [link["url"] for link in links]
+    
+    # marionymph should have these links (based on the channel page)
+    expected_platforms = ["Linktree", "Patreon", "Twitch", "Twitter", "Throne"]
+    
+    for platform in expected_platforms:
+        assert platform in titles, f"Should have {platform} link. Found: {titles}"
+    
+    # Check that URLs contain the handle
+    for url in urls:
+        assert MARIONYMPH_HANDLE in url.lower() or "marionymph" in url.lower(), \
+            f"URL should contain the channel handle: {url}"
+
+
+def test_get_links_no_duplicate_urls():
+    """Test that there are no duplicate URLs in the links."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    links = creator.get_links()
+    
+    urls = [link["url"] for link in links]
+    unique_urls = set(urls)
+    
+    assert len(urls) == len(unique_urls), \
+        f"Should have no duplicate URLs. Found: {urls}"
+
+
+def test_get_links_urls_are_valid():
+    """Test that all URLs are valid HTTP/HTTPS URLs."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    links = creator.get_links()
+    
+    for link in links:
+        url = link["url"]
+        assert url.startswith("http://") or url.startswith("https://"), \
+            f"URL should start with http:// or https://: {url}"
+
+
+def test_get_links_with_channel_id_url():
+    """Test that get_links works when channel is created with channel ID URL."""
+    # First get the channel ID
+    creator1 = YoutubeCreator(MARIONYMPH_URL)
+    channel_id = creator1.channel_id
+    
+    # Create creator with channel ID
+    creator2 = YoutubeCreator(channel_id)
+    links = creator2.get_links()
+    
+    # Should still return a list (might be empty if InnerTube API doesn't return links for UC ID)
+    assert isinstance(links, list)
+
+
+def test_get_links_empty_for_channels_without_links():
+    """Test that get_links returns empty list for channels without social links."""
+    # Use a large channel that might not have social links in the header
+    # This test verifies the function doesn't crash even if no links are found
+    creator = YoutubeCreator("https://www.youtube.com/@Google")
+    links = creator.get_links()
+    
+    # Should return a list (might be empty or have links)
+    assert isinstance(links, list)
+
+
+def test_get_links_after_reload():
+    """Test that get_links works after reload()."""
+    creator = YoutubeCreator(MARIONYMPH_URL)
+    
+    # Get links before reload
+    links_before = creator.get_links()
+    
+    # Reload the channel data
+    creator.reload()
+    
+    # Get links after reload
+    links_after = creator.get_links()
+    
+    # Should have the same number of links
+    assert len(links_before) == len(links_after), \
+        f"Links count should be the same after reload. Before: {len(links_before)}, After: {len(links_after)}"

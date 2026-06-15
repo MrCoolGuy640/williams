@@ -244,6 +244,23 @@ class YoutubeCreator:
             workers=workers,
         )
 
+    def get_links(self) -> list[dict]:
+        """
+        Return the channel's social links (e.g. Twitter, Discord, Patreon).
+        
+        Returns
+        -------
+        list[dict]
+            A list of dictionaries, each with ``title`` and ``url`` keys.
+            Example::
+            
+                [
+                    {"title": "Twitter", "url": "https://twitter.com/handle"},
+                    {"title": "Discord", "url": "https://discord.gg/invite"},
+                ]
+        """
+        return self._d().get("links", [])
+
     def reload(self) -> YoutubeCreator:
         """Bust the cache and re-fetch channel data. Returns self."""
         with self._lock:

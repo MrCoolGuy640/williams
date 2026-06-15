@@ -995,6 +995,200 @@ def _extract_yt_initial_data(page_html: str) -> dict[str, Any]:
         raise ParseError("Failed to parse ytInitialData") from e
 
 
+def _extract_channel_links(initial: dict) -> list[dict]:
+    """
+    Extract social links from channel data.
+    
+    YouTube stores social links in various places:
+    1. Header's attributionViewModel (e.g., linktr.ee)
+    2. Video description in channelVideoPlayerRenderer (e.g., patreon, twitch, twitter)
+    
+    This function extracts links from all these sources.
+    
+    Parameters
+    ----------
+    initial : dict
+        The parsed ytInitialData JSON object.
+    
+    Returns
+    -------
+    list[dict]
+        A list of dictionaries with 'title' and 'url' keys for each link.
+        Example: [{"title": "Twitter", "url": "https://twitter.com/handle"}, ...]
+    """
+    links = []
+    seen_urls = set()
+    
+    # Social media domains we're looking for
+    social_domains = {
+        "twitter.com": "Twitter",
+        "x.com": "Twitter",
+        "twitch.tv": "Twitch",
+        "patreon.com": "Patreon",
+        "throne.com": "Throne",
+        "instagram.com": "Instagram",
+        "facebook.com": "Facebook",
+        "tiktok.com": "TikTok",
+        "discord.gg": "Discord",
+        "linktr.ee": "Linktree",
+    }
+    
+    def add_link(title: str, url: str) -> None:
+        """Add a link if URL is valid and not already seen."""
+        if not url or url in seen_urls:
+            return
+        # Skip YouTube's own URLs (except redirect URLs which contain the actual link)
+        if "youtube.com" in url and "redirect" not in url:
+            return
+        seen_urls.add(url)
+        links.append({"title": title, "url": url})
+    
+    def extract_actual_url(url: str) -> str:
+        """Extract the actual URL from YouTube's redirect format."""
+        if "youtube.com/redirect" in url:
+            from urllib.parse import urlparse, parse_qs
+            try:
+                parsed = urlparse(url)
+                params = parse_qs(parsed.query)
+                if "q" in params:
+                    return params["q"][0]
+            except Exception:
+                pass
+        return url
+    
+    def get_domain_title(url: str) -> str:
+        """Extract a human-readable title from a URL."""
+        from urllib.parse import urlparse
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.lower()
+            # Remove www. prefix
+            if domain.startswith("www."):
+                domain = domain[4:]
+            # Return the mapped title for known domains
+            for social_domain, title in social_domains.items():
+                if social_domain in domain:
+                    return title
+            # Capitalize first letter of domain
+            if domain:
+                return domain[0].upper() + domain[1:]
+        except Exception:
+            pass
+        return url
+    
+    def is_social_url(url: str) -> bool:
+        """Check if a URL is a social media URL."""
+        url_lower = url.lower()
+        return any(domain in url_lower for domain in social_domains.keys())
+    
+    # Method 1: Extract from attributionViewModel in header
+    header = (
+        _dig(initial, "header", "c4TabbedHeaderRenderer")
+        or _dig(initial, "header", "pageHeaderRenderer")
+        or {}
+    )
+    
+    attribution = _dig(header, "content", "pageHeaderViewModel", "attribution", "attributionViewModel")
+    if attribution:
+        command_runs = _dig(attribution, "text", "commandRuns") or []
+        for run in command_runs:
+            url = _dig(run, "onTap", "innertubeCommand", "urlEndpoint", "url") or ""
+            actual_url = extract_actual_url(url)
+            if actual_url and actual_url != url and is_social_url(actual_url):
+                title = get_domain_title(actual_url)
+                add_link(title, actual_url)
+    
+    # Method 2: Extract from video description in channelVideoPlayerRenderer
+    # This is where YouTube stores links like patreon, twitch, twitter, etc.
+    video_player = _dig(
+        initial, 
+        "contents", "twoColumnBrowseResultsRenderer", "tabs", 0, 
+        "tabRenderer", "content", "sectionListRenderer", "contents", 0, 
+        "itemSectionRenderer", "contents", 0, 
+        "channelVideoPlayerRenderer"
+    )
+    
+    if video_player:
+        description = video_player.get("description", {})
+        runs = description.get("runs", []) if isinstance(description, dict) else []
+        
+        for run in runs:
+            # Check for direct text URLs (like "https://patreon.com/...")
+            text = run.get("text", "")
+            if text and is_social_url(text):
+                # Clean up the URL
+                url = text.strip()
+                if url.startswith("http"):
+                    title = get_domain_title(url)
+                    add_link(title, url)
+            
+            # Check for URLs in navigationEndpoint
+            nav_endpoint = run.get("navigationEndpoint", {})
+            url_endpoint = nav_endpoint.get("urlEndpoint", {})
+            url = url_endpoint.get("url", "") if isinstance(url_endpoint, dict) else ""
+            
+            if url:
+                actual_url = extract_actual_url(url)
+                if actual_url and is_social_url(actual_url):
+                    title = get_domain_title(actual_url)
+                    add_link(title, actual_url)
+    
+    # Method 3: Look for link bands in c4TabbedHeaderRenderer (older format)
+    if not links:
+        link_bands = _dig(header, "headerLinks", "channelHeaderLinksViewModel", "primaryLinks") or []
+        for link_band in link_bands:
+            endpoints = link_band.get("commandRuns") or []
+            for endpoint in endpoints:
+                url = _dig(endpoint, "innertubeCommand", "urlEndpoint", "url") or ""
+                actual_url = extract_actual_url(url)
+                if actual_url and is_social_url(actual_url):
+                    title = link_band.get("title", "") or get_domain_title(actual_url)
+                    add_link(title, actual_url)
+    
+    # Method 4: Search in the about section (channelAboutFullMetadataRenderer)
+    if not links:
+        tabs = _dig(initial, "contents", "twoColumnBrowseResultsRenderer", "tabs") or []
+        for tab in tabs:
+            tab_renderer = tab.get("tabRenderer") or {}
+            content = tab_renderer.get("content") or {}
+            section_list = content.get("sectionListRenderer") or {}
+            contents = section_list.get("contents") or []
+            
+            for section in contents:
+                item_section = section.get("itemSectionRenderer") or {}
+                section_contents = item_section.get("contents") or []
+                
+                for item in section_contents:
+                    about_renderer = _dig(item, "channelAboutFullMetadataRenderer") or {}
+                    if about_renderer:
+                        primary_links = about_renderer.get("primaryLinks") or []
+                        for link in primary_links:
+                            url = _dig(link, "commandRuns", 0, "innertubeCommand", "urlEndpoint", "url") or ""
+                            actual_url = extract_actual_url(url)
+                            if actual_url and is_social_url(actual_url):
+                                title = link.get("title", "") or get_domain_title(actual_url)
+                                add_link(title, actual_url)
+    
+    return links
+
+
+def _extract_domain_name(url: str) -> str:
+    """Extract a human-readable domain name from a URL."""
+    if not url:
+        return ""
+    
+    # Remove protocol
+    domain = re.sub(r'^https?://', '', url)
+    # Remove www.
+    domain = re.sub(r'^www\.', '', domain)
+    # Get the first part of the path
+    domain = domain.split('/')[0]
+    # Capitalize first letter
+    if domain:
+        domain = domain[0].upper() + domain[1:]
+    return domain
+
+
 def _parse_channel_page(html_text: str, handle_or_id: str) -> dict:
     initial  = _extract_yt_initial_data(html_text)
     metadata = _dig(initial, "metadata", "channelMetadataRenderer") or {}
@@ -1055,6 +1249,11 @@ def _parse_channel_page(html_text: str, handle_or_id: str) -> dict:
     
     uploads_playlist_id = f"UU{channel_id[2:]}" if channel_id.startswith("UC") else None
 
+    # Extract social links from both ytInitialData and HTML
+    links = _extract_channel_links(initial)
+    
+
+
     return {
         "channel_id":           channel_id,
         "channel_name":         channel_name,
@@ -1063,6 +1262,7 @@ def _parse_channel_page(html_text: str, handle_or_id: str) -> dict:
         "avatar_url":           avatar_url,
         "banner_url":           banner_url,
         "uploads_playlist_id":  uploads_playlist_id,
+        "links":                links,
     }
 
 
